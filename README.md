@@ -69,7 +69,7 @@ def criar_tabelas():
         )
     """)
 
-    # --- CARGA INICIAL DE DADOS DE DEMONSTRAÇÃO (SEED) ---
+    #  CARGA INICIAL DE DADOS DE DEMONSTRAÇÃO (SEED) 
     
     # 1. Popula Clientes (12 Pessoas Físicas)
     cursor.execute("SELECT COUNT(*) FROM clientes")
@@ -191,7 +191,7 @@ def formatar_data_sem_segundos_br(data_banco):
     except ValueError:
         return data_banco
 
-# --- CRUD: CLIENTES ---
+#  CRUD: CLIENTES 
 def cadastrar_cliente():
     print("\n--- CADASTRO DE CLIENTE ---")
     nome = ler_texto("Nome: ")
@@ -208,7 +208,7 @@ def cadastrar_cliente():
     conn.close()
     print("✅ Cliente cadastrado com sucesso!\n")
 
-# --- NOVO: ALTERAR CLIENTE (E SEU LOCAL AGENDADO) ---
+#  NOVO: ALTERAR CLIENTE (E SEU LOCAL AGENDADO) 
 def alterar_cliente():
     print("\n--- ALTERAR DADOS DO CLIENTE ---")
     exibir_clientes()
@@ -246,7 +246,7 @@ def alterar_cliente():
     conn.close()
     print("✅ Dados do cliente atualizados com sucesso!\n")
 
-# --- NOVO: EXCLUIR CLIENTE ---
+#  NOVO: EXCLUIR CLIENTE 
 def excluir_cliente():
     print("\n--- EXCLUIR CLIENTE ---")
     exibir_clientes()
@@ -286,7 +286,7 @@ def exibir_clientes():
         print(f"{id_cliente:<5} | {nome:<25} | {tel:<15}")
     print("-" * 50 + "\n")
 
-# --- CRUD: TÉCNICOS ---
+#  CRUD: TÉCNICOS 
 def cadastrar_tecnico():
     print("\n--- CADASTRO DE TÉCNICO ---")
     nome = ler_texto("Nome do Técnico: ")
@@ -303,7 +303,7 @@ def cadastrar_tecnico():
     print("✅ Técnico cadastrado com sucesso!\n")
 
 
-# --- NOVO: EXCLUIR TÉCNICO ---
+#  NOVO: EXCLUIR TÉCNICO 
 def excluir_tecnico():
     print("\n--- EXCLUIR TÉCNICO ---")
     exibir_tecnicos()
@@ -342,7 +342,7 @@ def exibir_tecnicos():
         print(f"{id_tecnico:<5} | {nome:<25} | {especialidade:<25}")
     print("-" * 60 + "\n")
 
-# --- CRUD: PRODUTOS / SERVIÇOS ---
+#  CRUD: PRODUTOS / SERVIÇOS 
 def cadastrar_produto():
     print("\n--- CADASTRO DE PRODUTO/SERVIÇO ---")
     nome = ler_texto("Nome do produto/serviço: ")
@@ -359,7 +359,7 @@ def cadastrar_produto():
     conn.close()
     print("✅ Produto/serviço cadastrado!\n")
 
-# --- NOVO: EXCLUIR SERVIÇO / PRODUTO ---
+#  NOVO: EXCLUIR SERVIÇO / PRODUTO 
 def excluir_servico_produto():
     print("\n--- EXCLUIR PRODUTO OU SERVIÇO ---")
     exibir_produtos()
@@ -398,7 +398,7 @@ def exibir_produtos():
         print(f"{id_produto:<5} | {nome:<25} | {tipo:<10} | R$ {preco:.2f}")
     print("-" * 55 + "\n")
 
-# --- GERENCIAMENTO DE OS ---
+#  GERENCIAMENTO DE OS 
 def calcular_total_pedido(pedido_id):
     conn = conectar()
     cursor = conn.cursor()
@@ -590,7 +590,7 @@ def atualizar_status_pedido():
     print("✅ Status alterado com sucesso!\n")
 
     
-# --- RELATÓRIOS ---
+#  RELATÓRIOS 
 def relatorio_detalhado_pedido():
     conn = conectar()
     cursor = conn.cursor()
@@ -766,7 +766,7 @@ def relatorio_por_status():
     
     print(f"\nValor total neste status: R$ {total_acumulado:.2f}\n")
 
-# --- MENU PRINCIPAL ---
+#  MENU PRINCIPAL 
 def menu():
     criar_tabelas()
 
