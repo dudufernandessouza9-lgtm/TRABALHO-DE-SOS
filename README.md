@@ -628,7 +628,7 @@ def relatorio_por_status():
 
     print(f"\nValor total neste status: R$ {total_acumulado:.2f}\n")
 
-# --- MENU PRINCIPAL ---
+#  MENU PRINCIPAL 
 def menu():
     criar_tabelas()
 
