@@ -301,3 +301,290 @@ def cadastrar_tecnico():
     conn.commit()
     conn.close()
     print("✅ Técnico cadastrado com sucesso!\n")
+
+
+# --- NOVO: EXCLUIR TÉCNICO ---
+def excluir_tecnico():
+    print("\n--- EXCLUIR TÉCNICO ---")
+    exibir_tecnicos()
+    tecnico_id = ler_inteiro("Digite o ID do técnico que deseja EXCLUIR: ", 1)
+
+    conn = conectar()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("DELETE FROM tecnicos WHERE id=?", (tecnico_id,))
+        conn.commit()
+        print("✅ Técnico excluído com sucesso!\n")
+    except sqlite3.IntegrityError:
+        print("❌ Erro: Não é possível excluir um técnico associado a Ordens de Serviço!")
+    finally:
+        conn.close()
+
+def listar_tecnicos():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, nome, especialidade FROM tecnicos ORDER BY nome")
+    tecnicos = cursor.fetchall()
+    conn.close()
+    return tecnicos
+
+def exibir_tecnicos():
+    tecnicos = listar_tecnicos()
+    if not tecnicos:
+        print("⚠️ Nenhum técnico cadastrado.\n")
+        return
+
+    print("\n" + "-" * 60)
+    print(f"{'ID':<5} | {'NOME DO TÉCNICO':<25} | {'ESPECIALIDADE':<25}")
+    print("-" * 60)
+    for id_tecnico, nome, especialidade in tecnicos:
+        print(f"{id_tecnico:<5} | {nome:<25} | {especialidade:<25}")
+    print("-" * 60 + "\n")
+
+# --- CRUD: PRODUTOS / SERVIÇOS ---
+def cadastrar_produto():
+    print("\n--- CADASTRO DE PRODUTO/SERVIÇO ---")
+    nome = ler_texto("Nome do produto/serviço: ")
+    tipo = escolher_opcao("Tipo (produto/servico): ", ["produto", "servico"])
+    preco = ler_preco("Preço R$: ")
+
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO produtos (nome, tipo, preco) VALUES (?,?,?)",
+        (nome, tipo, preco)
+    )
+    conn.commit()
+    conn.close()
+    print("✅ Produto/serviço cadastrado!\n")
+
+# --- NOVO: EXCLUIR SERVIÇO / PRODUTO ---
+def excluir_servico_produto():
+    print("\n--- EXCLUIR PRODUTO OU SERVIÇO ---")
+    exibir_produtos()
+    produto_id = ler_inteiro("Digite o ID do item que deseja EXCLUIR: ", 1)
+
+    conn = conectar()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("DELETE FROM produtos WHERE id=?", (produto_id,))
+        conn.commit()
+        print("✅ Item excluído com sucesso!\n")
+    except sqlite3.IntegrityError:
+        print("❌ Erro: Não é possível excluir um item que já foi faturado em alguma Ordem de Serviço!")
+    finally:
+        conn.close()
+
+def listar_produtos():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, nome, tipo, preco FROM produtos ORDER BY nome")
+    produtos = cursor.fetchall()
+    conn.close()
+    return produtos
+
+def exibir_produtos():
+    produtos = listar_produtos()
+    if not produtos:
+        print("⚠️ Nenhum produto cadastrado.\n")
+        return
+
+    print("\n" + "-" * 55)
+    print(f"{'ID':<5} | {'NOME DO ITEM':<25} | {'TIPO':<10} | {'PREÇO':<10}")
+    print("-" * 55)
+    for id_produto, nome, tipo, preco in produtos:
+        print(f"{id_produto:<5} | {nome:<25} | {tipo:<10} | R$ {preco:.2f}")
+    print("-" * 55 + "\n")
+
+# --- GERENCIAMENTO DE OS ---
+def calcular_total_pedido(pedido_id):
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT COALESCE(SUM(quantidade * preco_unitario), 0) "
+        "FROM itens_pedido WHERE pedido_id=?",
+        (pedido_id,)
+    )
+    total = cursor.fetchone()[0]
+    conn.close()
+    return float(total)
+
+def registrar_pedido():
+    clientes = listar_clientes()
+    if not clientes:
+        print("⚠️ Cadastre clientes primeiro.\n")
+        return
+
+    tecnicos = listar_tecnicos()
+    if not tecnicos:
+        print("⚠️ Cadastre técnicos primeiro.\n")
+        return
+
+    produtos = listar_produtos()
+    if not produtos:
+        print("⚠️ Cadastre produtos primeiro.\n")
+        return
+
+    exibir_clientes()
+    cliente_id = ler_inteiro("ID do cliente: ", 1)
+
+    ids_clientes = [cliente[0] for cliente in clientes]
+    if cliente_id not in ids_clientes:
+        print("⚠️ Cliente não encontrado.\n")
+        return
+
+    exibir_tecnicos()
+    tecnico_id = ler_inteiro("ID do técnico responsável: ", 1)
+
+    ids_tecnicos = [tecnico[0] for tecnico in tecnicos]
+    if tecnico_id not in ids_tecnicos:
+        print("⚠️ Técnico não encontrado.\n")
+        return
+
+    print("\n--- AGENDAMENTO DA EXECUÇÃO ---")
+    data_objeto = ler_data_valida("Digite a data agendada (DD/MM/AAAA): ")
+    hora_string = ler_hora_valida("Digite o horário agendado (HH:MM): ")
+    
+    data_agendamento = f"{data_objeto.strftime('%Y-%m-%d')} {hora_string}"
+
+    conn = conectar()
+    cursor = conn.cursor()
+
+    try:
+        hora_brasilia = datetime.now() - timedelta(hours=3)
+        data_abertura = hora_brasilia.strftime("%Y-%m-%d %H:%M:%S")
+
+        cursor.execute(
+            "INSERT INTO pedidos (cliente_id, tecnico_id, data_hora, data_agendamento, status) VALUES (?,?,?,?,?)",
+            (cliente_id, tecnico_id, data_abertura, data_agendamento, "aberto")
+        )
+        pedido_id = cursor.lastrowid
+        produtos_dict = {produto[0]: produto for produto in produtos}
+
+        print(f"\nOrdem de Serviço #{pedido_id} criada e agendada com sucesso.")
+        print("Adicione os itens (serviços executados ou produtos utilizados):")
+
+        while True:
+            exibir_produtos()
+            entrada = input("ID produto/serviço (ENTER ou 0 finaliza): ").strip()
+
+            if entrada == "" or entrada == "0":
+                break
+
+            if not entrada.isdigit():
+                print("⚠️ Digite somente números.\n")
+                continue
+
+            produto_id = int(entrada)
+            if produto_id not in produtos_dict:
+                print("⚠️ Item não encontrado.\n")
+                continue
+
+            quantidade = ler_inteiro("Quantidade: ", 1)
+            preco = produtos_dict[produto_id][3]
+
+            cursor.execute(
+                "INSERT INTO itens_pedido (pedido_id, produto_id, quantidade, preco_unitario) VALUES (?,?,?,?)",
+                (pedido_id, produto_id, quantidade, preco)
+            )
+            print("✅ Item adicionado.\n")
+
+        cursor.execute(
+            "SELECT COUNT(*) FROM itens_pedido WHERE pedido_id=?",
+            (pedido_id,)
+        )
+        quantidade_itens = cursor.fetchone()[0]
+
+        if quantidade_itens == 0:
+            cursor.execute("DELETE FROM pedidos WHERE id=?", (pedido_id,))
+            conn.commit()
+            print("⚠️ OS cancelada por falta de itens.\n")
+            return
+
+        conn.commit()
+        total = calcular_total_pedido(pedido_id)
+        print(f"\n✅ OS #{pedido_id} finalizada com sucesso!")
+        print(f"Total: R$ {total:.2f}\n")
+
+    except Exception as erro:
+        conn.rollback()
+        print("❌ Erro:", erro)
+
+    finally:
+        conn.close()
+
+def listar_pedidos():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT p.id, c.nome, t.nome, p.data_hora, p.data_agendamento, p.status
+        FROM pedidos p
+        INNER JOIN clientes c ON c.id = p.cliente_id
+        INNER JOIN tecnicos t ON t.id = p.tecnico_id
+        ORDER BY p.id DESC
+    """)
+    pedidos = cursor.fetchall()
+    conn.close()
+    return pedidos
+
+def exibir_pedidos():
+    pedidos = listar_pedidos()
+    if not pedidos:
+        print("\n⚠️ Nenhuma Ordem de Serviço cadastrada.\n")
+        return
+
+    print("\n========== ORDENS DE SERVIÇO (OS) ==========")
+    for id_pedido, cliente, tecnico, data, agendamento, status in pedidos:
+        total = calcular_total_pedido(id_pedido)
+        print(f"""
+OS: #{id_pedido}
+Cliente: {cliente}
+Técnico Responsável: {tecnico}
+Data de Abertura: {formatar_data_br(data)}
+Agendado para: {formatar_data_sem_segundos_br(agendamento)} ⏰
+Status: {status.upper()}
+Total: R$ {total:.2f}
+--------------------------------------------
+""")
+
+def atualizar_status_pedido():
+    pedidos = listar_pedidos()
+    if not pedidos:
+        print("⚠️ Nenhum pedido encontrado.\n")
+        return
+
+    exibir_pedidos()
+    pedido_id = ler_inteiro("Número da OS: ", 1)
+
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM pedidos WHERE id=?", (pedido_id,))
+    existe = cursor.fetchone()
+    
+    if not existe:
+        print("⚠️ OS não encontrada.\n")
+        conn.close()
+        return
+
+    print("\n--- ESCOLHA O STATUS ---")
+    for numero, status in enumerate(STATUS_VALIDOS, start=1):
+        print(f"{numero} - {status.upper()}")
+
+    while True:
+        escolha = input("Novo status (número): ").strip()
+        if escolha.isdigit():
+            numero = int(escolha)
+            if 1 <= numero <= len(STATUS_VALIDOS):
+                novo_status = STATUS_VALIDOS[numero - 1]
+                break
+        print("⚠️ Escolha inválida.\n")
+
+    cursor.execute(
+        "UPDATE pedidos SET status=? WHERE id=?",
+        (novo_status, pedido_id)
+    )
+    conn.commit()
+    conn.close()
+    print("✅ Status alterado com sucesso!\n")
