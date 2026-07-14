@@ -183,6 +183,267 @@ def exibir_clientes():
     print("-" * 50 + "\n")
 
 # --- CRUD: TÉCNICOS ---
+
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO tecnicos (nome, especialidade) VALUES (?,?)",
+        (nome, especialidade)
+    )
+    conn.commit()
+    conn.close()
+    print("✅ Técnico cadastrado com sucesso!\n")
+
+def listar_tecnicos():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, nome, especialidade FROM tecnicos ORDER BY nome")
+    tecnicos = cursor.fetchall()
+    conn.close()
+    return tecnicos
+
+def exibir_tecnicos():
+    tecnicos = listar_tecnicos()
+    if not tecnicos:
+        print("⚠️ Nenhum técnico cadastrado.\n")
+        return
+
+    print("\n" + "-" * 60)
+    print(f"{'ID':<5} | {'NOME DO TÉCNICO':<25} | {'ESPECIALIDADE':<25}")
+    print("-" * 60)
+    for id_tecnico, nome, especialidade in tecnicos:
+        print(f"{id_tecnico:<5} | {nome:<25} | {especialidade:<25}")
+    print("-" * 60 + "\n")
+
+# --- CRUD: SERVIÇOS ---
+def cadastrar_servico():
+    print("\n--- CADASTRO DE SERVIÇO ---")
+    nome = ler_texto("Nome do serviço: ")
+    preco = ler_preco("Preço R$: ")
+
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO servicos (nome, preco) VALUES (?,?)",
+        (nome, preco)
+    )
+    conn.commit()
+    conn.close()
+    print("✅ Serviço cadastrado!\n")
+
+def listar_servicos():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, nome, preco FROM servicos ORDER BY nome")
+    servicos = cursor.fetchall()
+    conn.close()
+    return servicos
+
+def exibir_servicos():
+    servicos = listar_servicos()
+    if not servicos:
+        print("⚠️ Nenhum serviço cadastrado.\n")
+        return
+
+    print("\n" + "-" * 45)
+    print(f"{'ID':<5} | {'NOME DO SERVIÇO':<25} | {'PREÇO':<10}")
+    print("-" * 45)
+    for id_servico, nome, preco in servicos:
+        print(f"{id_servico:<5} | {nome:<25} | R$ {preco:.2f}")
+    print("-" * 45 + "\n")
+
+# --- GERENCIAMENTO DE OS ---
+def calcular_total_pedido(pedido_id):
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT COALESCE(SUM(quantidade * preco_unitario), 0) "
+        "FROM itens_pedido WHERE pedido_id=?",
+        (pedido_id,)
+    )
+    total = cursor.fetchone()[0]
+    conn.close()
+    return float(total)
+
+def registrar_pedido():
+    clientes = listar_clientes()
+    if not clientes:
+        print("⚠️ Cadastre clientes primeiro.\n")
+        return
+
+    tecnicos = listar_tecnicos()
+    if not tecnicos:
+        print("⚠️ Cadastre técnicos primeiro.\n")
+        return
+
+    servicos = listar_servicos()
+    if not servicos:
+        print("⚠️ Cadastre serviços primeiro.\n")
+        return
+
+    exibir_clientes()
+    cliente_id = ler_inteiro("ID do cliente: ", 1)
+
+    ids_clientes = [cliente[0] for cliente in clientes]
+    if cliente_id not in ids_clientes:
+        print("⚠️ Cliente não encontrado.\n")
+        return
+
+    exibir_tecnicos()
+    tecnico_id = ler_inteiro("ID do técnico responsável: ", 1)
+
+    ids_tecnicos = [tecnico[0] for tecnico in tecnicos]
+    if tecnico_id not in ids_tecnicos:
+        print("⚠️ Técnico não encontrado.\n")
+        return
+
+    print("\n--- AGENDAMENTO DA EXECUÇÃO ---")
+    data_objeto = ler_data_valida("Digite a data agendada (DD/MM/AAAA): ")
+    hora_string = ler_hora_valida("Digite o horário agendado (HH:MM): ")
+
+    data_agendamento = f"{data_objeto.strftime('%Y-%m-%d')} {hora_string}"
+
+    conn = conectar()
+    cursor = conn.cursor()
+
+    try:
+        # Fuso horário corrigido (-3 horas em relação ao servidor padrão)
+        hora_brasilia = datetime.now() - timedelta(hours=3)
+        data_abertura = hora_brasilia.strftime("%Y-%m-%d %H:%M:%S")
+
+        cursor.execute(
+            "INSERT INTO pedidos (cliente_id, tecnico_id, data_hora, data_agendamento, status) VALUES (?,?,?,?,?)",
+            (cliente_id, tecnico_id, data_abertura, data_agendamento, "aberto")
+        )
+        pedido_id = cursor.lastrowid
+        servicos_dict = {servico[0]: servico for servico in servicos}
+
+        print(f"\nOrdem de Serviço #{pedido_id} criada e agendada com sucesso.")
+        print("Adicione os serviços executados:")
+
+        while True:
+            exibir_servicos()
+            entrada = input("ID do serviço (ENTER ou 0 finaliza): ").strip()
+
+            if entrada == "" or entrada == "0":
+                break
+
+            if not entrada.isdigit():
+                print("⚠️ Digite somente números.\n")
+                continue
+
+            servico_id = int(entrada)
+            if servico_id not in servicos_dict:
+                print("⚠️ Serviço não encontrado.\n")
+                continue
+
+            quantidade = ler_inteiro("Quantidade: ", 1)
+            preco = servicos_dict[servico_id][2]
+
+            cursor.execute(
+                "INSERT INTO itens_pedido (pedido_id, servico_id, quantidade, preco_unitario) VALUES (?,?,?,?)",
+                (pedido_id, servico_id, quantidade, preco)
+            )
+            print("✅ Serviço adicionado.\n")
+
+        cursor.execute(
+            "SELECT COUNT(*) FROM itens_pedido WHERE pedido_id=?",
+            (pedido_id,)
+        )
+        quantidade_itens = cursor.fetchone()[0]
+
+        if quantidade_itens == 0:
+            cursor.execute("DELETE FROM pedidos WHERE id=?", (pedido_id,))
+            conn.commit()
+            print("⚠️ OS cancelada por falta de itens.\n")
+            return
+
+        conn.commit()
+        total = calcular_total_pedido(pedido_id)
+        print(f"\n✅ OS #{pedido_id} finalizada com sucesso!")
+        print(f"Total: R$ {total:.2f}\n")
+
+    except Exception as erro:
+        conn.rollback()
+        print("❌ Erro:", erro)
+
+    finally:
+        conn.close()
+
+def listar_pedidos():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT p.id, c.nome, t.nome, p.data_hora, p.data_agendamento, p.status
+        FROM pedidos p
+        INNER JOIN clientes c ON c.id = p.cliente_id
+        INNER JOIN tecnicos t ON t.id = p.tecnico_id
+        ORDER BY p.id DESC
+    """)
+    pedidos = cursor.fetchall()
+    conn.close()
+    return pedidos
+
+def exibir_pedidos():
+    pedidos = listar_pedidos()
+    if not pedidos:
+        print("\n⚠️ Nenhuma Ordem de Serviço cadastrada.\n")
+        return
+
+    print("\n========== ORDENS DE SERVIÇO (OS) ==========")
+    for id_pedido, cliente, tecnico, data, agendamento, status in pedidos:
+        total = calcular_total_pedido(id_pedido)
+        print(f"""
+OS: #{id_pedido}
+Cliente: {cliente}
+Técnico Responsável: {tecnico}
+Data de Abertura: {formatar_data_br(data)}
+Agendado para: {formatar_data_sem_segundos_br(agendamento)} ⏰
+Status: {status.upper()}
+Total: R$ {total:.2f}
+--------------------------------------------
+""")
+
+def atualizar_status_pedido():
+    pedidos = listar_pedidos()
+    if not pedidos:
+        print("⚠️ Nenhum pedido encontrado.\n")
+        return
+
+    exibir_pedidos()
+    pedido_id = ler_inteiro("Número da OS: ", 1)
+
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM pedidos WHERE id=?", (pedido_id,))
+    existe = cursor.fetchone()
+
+    if not existe:
+        print("⚠️ OS não encontrada.\n")
+        conn.close()
+        return
+
+    print("\n--- ESCOLHA O STATUS ---")
+    for numero, status in enumerate(STATUS_VALIDOS, start=1):
+        print(f"{numero} - {status.upper()}")
+
+    while True:
+        escolha = input("Novo status (número): ").strip()
+        if escolha.isdigit():
+            numero = int(escolha)
+            if 1 <= numero <= len(STATUS_VALIDOS):
+                novo_status = STATUS_VALIDOS[numero - 1]
+                break
+        print("⚠️ Escolha inválida.\n")
+
+    cursor.execute(
+        "UPDATE pedidos SET status=? WHERE id=?",
+        (novo_status, pedido_id)
+    )
+    conn.commit()
+    conn.close()
+    print("✅ Status alterado com sucesso!\n")
+
 def cadastrar_tecnico():
     print("\n--- CADASTRO DE TÉCNICO ---")
     nome = ler_texto("Nome do Técnico: ")
