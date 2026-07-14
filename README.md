@@ -588,3 +588,241 @@ def atualizar_status_pedido():
     conn.commit()
     conn.close()
     print("✅ Status alterado com sucesso!\n")
+
+    
+# --- RELATÓRIOS ---
+def relatorio_detalhado_pedido():
+    conn = conectar()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT p.id, c.nome, p.data_hora 
+        FROM pedidos p
+        INNER JOIN clientes c ON c.id = p.cliente_id
+        ORDER BY p.id DESC
+    """)
+    lista_oss = cursor.fetchall()
+    
+    if not lista_oss:
+        print("⚠️ Nenhuma OS cadastrada no sistema.\n")
+        conn.close()
+        return
+
+    print("\n--- ORDENS DE SERVIÇO CADASTRADAS ---")
+    print(f"{'ID da OS':<10} | {'Cliente':<25} | {'Data de Abertura':<20}")
+    print("-" * 60)
+    for id_os, nome_cliente, data_abertura in lista_oss:
+        print(f"#{id_os:<9} | {nome_cliente:<25} | {formatar_data_br(data_abertura)}")
+    print("-" * 60)
+
+    pedido_id = ler_inteiro("\nDigite o número da OS que deseja detalhar: ", 1)
+
+    cursor.execute("""
+        SELECT p.id, c.nome, t.nome, p.data_hora, p.data_agendamento, p.status, c.endereco
+        FROM pedidos p
+        INNER JOIN clientes c ON c.id=p.cliente_id
+        INNER JOIN tecnicos t ON t.id=p.tecnico_id
+        WHERE p.id=?
+    """, (pedido_id,))
+    pedido = cursor.fetchone()
+
+    if not pedido:
+        print("⚠️ OS não encontrada.\n")
+        conn.close()
+        return
+
+    cursor.execute("""
+        SELECT pr.nome, ip.quantidade, ip.preco_unitario, pr.tipo
+        FROM itens_pedido ip
+        INNER JOIN produtos pr ON pr.id=ip.produto_id
+        WHERE ip.pedido_id=?
+    """, (pedido_id,))
+    itens = cursor.fetchall()
+    conn.close()
+
+    endereco_exibicao = pedido[6] if pedido[6] else "Não informado"
+
+    print("\n" + "=" * 45)
+    print(f" OS DETALHADA: #{pedido[0]}")
+    print("=" * 45)
+    print(f"Cliente: {pedido[1]}")
+    print(f"Técnico Responsável: {pedido[2]}")
+    print(f"Abertura do Chamado: {formatar_data_br(pedido[3])}")
+    print(f"Execução Agendada: {formatar_data_sem_segundos_br(pedido[4])} ⏰")
+    print(f"Endereço do Serviço: {endereco_exibicao} 📍")
+    print(f"Status: {pedido[5].upper()}")
+    print("-" * 45)
+
+    print("Atividades Executadas e Materiais Utilizados:")
+    for nome, quantidade, preco, tipo in itens:
+        print(f" • [{tipo.upper()}] {quantidade}x {nome} = R$ {quantidade * preco:.2f}")
+
+    total = calcular_total_pedido(pedido_id)
+    print("-" * 45)
+    print(f"TOTAL DA OS: R$ {total:.2f}")
+    print("=" * 45 + "\n")
+
+def relatorio_por_cliente():
+    clientes = listar_clientes()
+    if not clientes:
+        print("Nenhum cliente cadastrado.\n")
+        return
+
+    exibir_clientes()
+    cliente_id = ler_inteiro("ID do cliente: ", 1)
+
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT p.id, t.nome, p.data_hora, p.data_agendamento, p.status 
+        FROM pedidos p 
+        INNER JOIN tecnicos t ON t.id=p.tecnico_id
+        WHERE p.cliente_id=? ORDER BY p.id DESC
+    """, (cliente_id,))
+    pedidos = cursor.fetchall()
+    conn.close()
+
+    if not pedidos:
+        print("Nenhuma OS encontrada para este cliente.\n")
+        return
+
+    total_cliente = 0
+    print("\n--- HISTÓRICO DE OS POR CLIENTE ---")
+    for id_pedido, tecnico, data, agendamento, status in pedidos:
+        total = calcular_total_pedido(id_pedido)
+        total_cliente += total
+        print(f"OS: #{id_pedido} | Responsável: {tecnico} | Abertura: {formatar_data_br(data)} | Agendado: {formatar_data_sem_segundos_br(agendamento)} | Status: {status.upper()} | R$ {total:.2f}")
+
+    print(f"\nTotal investido pelo cliente: R$ {total_cliente:.2f}\n")
+
+def relatorio_por_periodo():
+    print("\n--- FILTRAR POR PERÍODO ---")
+    dt_inicio = ler_data_valida("Data inicial (DD/MM/AAAA): ")
+    dt_fim = ler_data_valida("Data final (DD/MM/AAAA): ")
+
+    inicio = dt_inicio.strftime("%Y-%m-%d")
+    fim = dt_fim.strftime("%Y-%m-%d")
+
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT p.id, c.nome, t.nome, p.data_hora, p.data_agendamento, p.status
+        FROM pedidos p
+        INNER JOIN clientes c ON c.id=p.cliente_id
+        INNER JOIN tecnicos t ON t.id=p.tecnico_id
+        WHERE date(p.data_hora) BETWEEN ? AND ?
+        ORDER BY p.data_hora
+    """, (inicio, fim))
+    pedidos = cursor.fetchall()
+    conn.close()
+
+    if not pedidos:
+        print("\n⚠️ Nenhuma OS encontrada nesse período.\n")
+        return
+
+    total_periodo = 0
+    print("\n========== RELATÓRIO DE OS POR PERÍODO ==========")
+    for id_pedido, nome_cliente, nome_tecnico, data, agendamento, status in pedidos:
+        total = calcular_total_pedido(id_pedido)
+        total_periodo += total
+        print(f"OS: #{id_pedido} | Cliente: {nome_cliente} | Técnico: {nome_tecnico} | Abertura: {formatar_data_br(data)} | Agendamento: {formatar_data_sem_segundos_br(agendamento)} | Status: {status.upper()} | Total: R$ {total:.2f}")
+
+    print(f"\nTOTAL FATURADO NO PERÍODO: R$ {total_periodo:.2f}\n")
+
+def relatorio_por_status():
+    print("\n--- FILTRAR POR STATUS ---")
+    print("1 - Abertas / Pendentes")
+    print("2 - Em Andamento")
+    print("3 - Concluídas / Realizadas")
+    print("4 - Canceladas")
+    
+    opcao = escolher_opcao("Escolha uma opção (1-4): ", ["1", "2", "3", "4"])
+    status_map = {"1": "aberto", "2": "em andamento", "3": "concluido", "4": "cancelado"}
+    status_buscado = status_map[opcao]
+
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT p.id, c.nome, t.nome, p.data_hora, p.data_agendamento
+        FROM pedidos p
+        INNER JOIN clientes c ON c.id=p.cliente_id
+        INNER JOIN tecnicos t ON t.id=p.tecnico_id
+        WHERE p.status=?
+        ORDER BY p.id DESC
+    """, (status_buscado,))
+    pedidos = cursor.fetchall()
+    conn.close()
+
+    if not pedidos:
+        print(f"\n⚠️ Nenhuma OS encontrada com o status '{status_buscado}'.\n")
+        return
+
+    print(f"\n========== RELATÓRIO DE ORDENS DE SERVIÇO: {status_buscado.upper()} ==========")
+    total_acumulado = 0
+    for id_pedido, cliente, tecnico, data, agendamento in pedidos:
+        total = calcular_total_pedido(id_pedido)
+        total_acumulado += total
+        print(f"OS: #{id_pedido} | Cliente: {cliente} | Técnico: {tecnico} | Abertura: {formatar_data_br(data)} | Agendado: {formatar_data_sem_segundos_br(agendamento)} | Valor: R$ {total:.2f}")
+    
+    print(f"\nValor total neste status: R$ {total_acumulado:.2f}\n")
+
+# --- MENU PRINCIPAL ---
+def menu():
+    criar_tabelas()
+
+   
+    opcoes = {
+        "1": cadastrar_cliente,
+        "2": exibir_clientes,
+        "3": cadastrar_tecnico,    
+        "4": exibir_tecnicos,      
+        "5": cadastrar_produto,     
+        "6": exibir_produtos,      
+        "7": registrar_pedido,      
+        "8": exibir_pedidos,       
+        "9": atualizar_status_pedido, 
+        "10": relatorio_detalhado_pedido,
+        "11": relatorio_por_cliente,   
+        "12": relatorio_por_periodo,
+        "13": relatorio_por_status,
+        "14": alterar_cliente,          
+        "15": excluir_cliente,           
+        "16": excluir_servico_produto,   
+        "17": excluir_tecnico            
+    }
+
+    while True:
+        print("\n" + "=" * 55)
+        print(" SISTEMA DE CONTROLE DE ORDENS DE SERVIÇO")
+        print(" EMPRESA DE LIMPEZA E MANUTENÇÃO")
+        print("=" * 55)
+
+        print("""
+ 1 - Cadastrar cliente               11 - Relatório por cliente
+ 2 - Listar clientes                 12 - Relatório por período
+ 3 - Cadastrar técnico               13 - Relatório Realizados/Pendentes
+ 4 - Listar técnicos                 ----------------------------------
+ 5 - Cadastrar produto/serviço       14 - Alterar dados do cliente
+ 6 - Listar produtos/serviços        15 - Excluir cliente 
+ 7 - Registrar e Agendar OS          16 - Excluir serviço 
+ 8 - Listar OSs                      17 - Excluir técnico 
+ 9 - Alterar status da OS            ----------------------------------
+10 - Detalhes de OS Específica       0  - Sair
+""")
+
+        opcao = input("Escolha uma opção: ").strip()
+
+        if opcao == "0":
+            print("\nSistema encerrado.")
+            break
+
+        if opcao in opcoes:
+            try:
+                opcoes[opcao]()
+            except Exception as erro:
+                print("❌ Erro inesperado:", erro)
+        else:
+            print("⚠️ Opção inválida.\n")
+
+if __name__ == "__main__":
+    menu()
