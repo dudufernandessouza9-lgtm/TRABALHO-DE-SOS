@@ -22,7 +22,7 @@ def criar_tabelas():
             endereco TEXT
         )
     """)
-    
+
     # Tabela tecnicos
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS tecnicos (
@@ -32,12 +32,11 @@ def criar_tabelas():
         )
     """)
 
-    # Tabela produtos/serviços
+    # Tabela serviços
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS produtos (
+        CREATE TABLE IF NOT EXISTS servicos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT NOT NULL,
-            tipo TEXT NOT NULL CHECK(tipo IN ('produto','servico')),
             preco REAL NOT NULL CHECK(preco >= 0)
         )
     """)
@@ -56,21 +55,21 @@ def criar_tabelas():
         )
     """)
 
-    # Tabela de itens no pedido
+    # Tabela de itens no pedido (Serviços prestados na OS)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS itens_pedido (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             pedido_id INTEGER NOT NULL,
-            produto_id INTEGER NOT NULL,
+            servico_id INTEGER NOT NULL,
             quantidade INTEGER NOT NULL CHECK(quantidade > 0),
             preco_unitario REAL NOT NULL,
             FOREIGN KEY(pedido_id) REFERENCES pedidos(id),
-            FOREIGN KEY(produto_id) REFERENCES produtos(id)
+            FOREIGN KEY(servico_id) REFERENCES servicos(id)
         )
     """)
 
-    #  CARGA INICIAL DE DADOS DE DEMONSTRAÇÃO (SEED) 
-    
+
+
     # 1. Popula Clientes (12 Pessoas Físicas)
     cursor.execute("SELECT COUNT(*) FROM clientes")
     if cursor.fetchone()[0] == 0:
@@ -90,7 +89,7 @@ def criar_tabelas():
         ]
         cursor.executemany("INSERT INTO clientes (nome, telefone, endereco) VALUES (?,?,?)", clientes_demo)
 
-    # 2. Popula Técnicos (4 profissionais)
+    #Popula Técnicos
     cursor.execute("SELECT COUNT(*) FROM tecnicos")
     if cursor.fetchone()[0] == 0:
         tecnicos_demo = [
@@ -101,22 +100,24 @@ def criar_tabelas():
         ]
         cursor.executemany("INSERT INTO tecnicos (nome, especialidade) VALUES (?,?)", tecnicos_demo)
 
-    # 3. Popula Produtos e Serviços (10 itens)
-    cursor.execute("SELECT COUNT(*) FROM produtos")
+    #Popula Apenas Serviços
+    cursor.execute("SELECT COUNT(*) FROM servicos")
     if cursor.fetchone()[0] == 0:
-        produtos_demo = [
-            ("Limpeza Residencial Comum", "servico", 150.00),
-            ("Limpeza Residencial Profunda", "servico", 280.00),
-            ("Higienização de Sofá (3 lug)", "servico", 220.00),
-            ("Higienização de Tapete (m²)", "servico", 25.00),
-            ("Limpeza Pós-Obra (m²)", "servico", 18.00),
-            ("Limpeza de Vidros/Janelas", "servico", 90.00),
-            ("Detergente Neutro Concentrado", "produto", 15.90),
-            ("Desinfetante Perfumado 5L", "produto", 32.50),
-            ("Impermeabilizante de Tecidos", "produto", 85.00),
-            ("Cera Auto-Brilho para Pisos", "produto", 49.90)
+        servicos_demo = [
+            ("Limpeza Residencial Padrão", 160.00),
+            ("Limpeza Residencial Profunda", 290.00),
+            ("Limpeza Comercial / Escritório", 220.00),
+            ("Limpeza Pós-Obra Premium (m²)", 22.00),
+            ("Higienização de Sofá (3 lug)", 240.00),
+            ("Higienização de Colchão Casal", 180.00),
+            ("Higienização de Tapetes (m²)", 28.00),
+            ("Limpeza de Vidros e Vitrines", 120.00),
+            ("Tratamento e Polimento de Pisos", 350.00),
+            ("Sanitização e Dedetização", 400.00),
+            ("Limpeza de Fachada Predial", 850.00),
+            ("Manutenção de Vidraças Altas", 250.00)
         ]
-        cursor.executemany("INSERT INTO produtos (nome, tipo, preco) VALUES (?,?,?)", produtos_demo)
+        cursor.executemany("INSERT INTO servicos (nome, preco) VALUES (?,?)", servicos_demo)
 
     conn.commit()
     conn.close()
@@ -191,12 +192,12 @@ def formatar_data_sem_segundos_br(data_banco):
     except ValueError:
         return data_banco
 
-#  CRUD: CLIENTES 
+#  CRUD: CLIENTES
 def cadastrar_cliente():
     print("\n--- CADASTRO DE CLIENTE ---")
     nome = ler_texto("Nome: ")
-    telefone = ler_texto("Telefone (opcional): ", False)
-    endereco = ler_texto("Endereço / Local de Atendimento (opcional): ", False)
+    telefone = ler_texto("Telefone: ", False)
+    endereco = ler_texto("Endereço / Local de Atendimento: ", False)
 
     conn = conectar()
     cursor = conn.cursor()
@@ -208,7 +209,6 @@ def cadastrar_cliente():
     conn.close()
     print("✅ Cliente cadastrado com sucesso!\n")
 
-#  NOVO: ALTERAR CLIENTE (E SEU LOCAL AGENDADO) 
 def alterar_cliente():
     print("\n--- ALTERAR DADOS DO CLIENTE ---")
     exibir_clientes()
@@ -226,7 +226,7 @@ def alterar_cliente():
 
     print(f"\nDados atuais -> Nome: {cliente[0]} | Tel: {cliente[1]} | Local: {cliente[2]}")
     print("(Pressione ENTER sem digitar nada para manter o dado atual)")
-    
+
     novo_nome = input(f"Novo Nome [{cliente[0]}]: ").strip()
     novo_nome = novo_nome if novo_nome != "" else cliente[0]
 
@@ -237,16 +237,15 @@ def alterar_cliente():
     novo_end = novo_end if novo_end != "" else cliente[2]
 
     cursor.execute("""
-        UPDATE clientes 
-        SET nome=?, telefone=?, endereco=? 
+        UPDATE clientes
+        SET nome=?, telefone=?, endereco=?
         WHERE id=?
     """, (novo_nome, novo_tel, novo_end, cliente_id))
-    
+
     conn.commit()
     conn.close()
-    print("✅ Dados do cliente atualizados com sucesso!\n")
+    print("✅ Dados do cliente updated com sucesso!\n")
 
-#  NOVO: EXCLUIR CLIENTE 
 def excluir_cliente():
     print("\n--- EXCLUIR CLIENTE ---")
     exibir_clientes()
@@ -254,7 +253,7 @@ def excluir_cliente():
 
     conn = conectar()
     cursor = conn.cursor()
-    
+
     try:
         cursor.execute("DELETE FROM clientes WHERE id=?", (cliente_id,))
         conn.commit()
@@ -262,6 +261,7 @@ def excluir_cliente():
     except sqlite3.IntegrityError:
         print("❌ Erro: Não é possível excluir um cliente que possui Ordens de Serviço vinculadas a ele!")
     finally:
+
         conn.close()
 
 def listar_clientes():
@@ -286,7 +286,7 @@ def exibir_clientes():
         print(f"{id_cliente:<5} | {nome:<25} | {tel:<15}")
     print("-" * 50 + "\n")
 
-#  CRUD: TÉCNICOS 
+#  CRUD: TÉCNICOS
 def cadastrar_tecnico():
     print("\n--- CADASTRO DE TÉCNICO ---")
     nome = ler_texto("Nome do Técnico: ")
@@ -302,8 +302,6 @@ def cadastrar_tecnico():
     conn.close()
     print("✅ Técnico cadastrado com sucesso!\n")
 
-
-#  NOVO: EXCLUIR TÉCNICO 
 def excluir_tecnico():
     print("\n--- EXCLUIR TÉCNICO ---")
     exibir_tecnicos()
@@ -311,7 +309,7 @@ def excluir_tecnico():
 
     conn = conectar()
     cursor = conn.cursor()
-    
+
     try:
         cursor.execute("DELETE FROM tecnicos WHERE id=?", (tecnico_id,))
         conn.commit()
@@ -342,63 +340,61 @@ def exibir_tecnicos():
         print(f"{id_tecnico:<5} | {nome:<25} | {especialidade:<25}")
     print("-" * 60 + "\n")
 
-#  CRUD: PRODUTOS / SERVIÇOS 
-def cadastrar_produto():
-    print("\n--- CADASTRO DE PRODUTO/SERVIÇO ---")
-    nome = ler_texto("Nome do produto/serviço: ")
-    tipo = escolher_opcao("Tipo (produto/servico): ", ["produto", "servico"])
-    preco = ler_preco("Preço R$: ")
+#  CRUD: Serviços
+def cadastrar_servico():
+    print("\n--- CADASTRO DE SERVIÇO ---")
+    nome = ler_texto("Nome do serviço: ")
+    preco = ler_preco("Preço/Tarifa R$: ")
 
     conn = conectar()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO produtos (nome, tipo, preco) VALUES (?,?,?)",
-        (nome, tipo, preco)
+        "INSERT INTO servicos (nome, preco) VALUES (?,?)",
+        (nome, preco)
     )
     conn.commit()
     conn.close()
-    print("✅ Produto/serviço cadastrado!\n")
+    print("✅ Serviço cadastrado com sucesso!\n")
 
-#  NOVO: EXCLUIR SERVIÇO / PRODUTO 
-def excluir_servico_produto():
-    print("\n--- EXCLUIR PRODUTO OU SERVIÇO ---")
-    exibir_produtos()
-    produto_id = ler_inteiro("Digite o ID do item que deseja EXCLUIR: ", 1)
+def excluir_servico():
+    print("\n--- EXCLUIR SERVIÇO ---")
+    exibir_servicos()
+    servico_id = ler_inteiro("Digite o ID do serviço que deseja EXCLUIR: ", 1)
 
     conn = conectar()
     cursor = conn.cursor()
-    
+
     try:
-        cursor.execute("DELETE FROM produtos WHERE id=?", (produto_id,))
+        cursor.execute("DELETE FROM servicos WHERE id=?", (servico_id,))
         conn.commit()
-        print("✅ Item excluído com sucesso!\n")
+        print("✅ Serviço excluído com sucesso!\n")
     except sqlite3.IntegrityError:
-        print("❌ Erro: Não é possível excluir um item que já foi faturado em alguma Ordem de Serviço!")
+        print("❌ Erro: Não é possível excluir um serviço que já foi faturado em alguma Ordem de Serviço!")
     finally:
         conn.close()
 
-def listar_produtos():
+def listar_servicos():
     conn = conectar()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, nome, tipo, preco FROM produtos ORDER BY nome")
-    produtos = cursor.fetchall()
+    cursor.execute("SELECT id, nome, preco FROM servicos ORDER BY nome")
+    servicos = cursor.fetchall()
     conn.close()
-    return produtos
+    return servicos
 
-def exibir_produtos():
-    produtos = listar_produtos()
-    if not produtos:
-        print("⚠️ Nenhum produto cadastrado.\n")
+def exibir_servicos():
+    servicos = listar_servicos()
+    if not servicos:
+        print("⚠️ Nenhum serviço cadastrado.\n")
         return
 
-    print("\n" + "-" * 55)
-    print(f"{'ID':<5} | {'NOME DO ITEM':<25} | {'TIPO':<10} | {'PREÇO':<10}")
-    print("-" * 55)
-    for id_produto, nome, tipo, preco in produtos:
-        print(f"{id_produto:<5} | {nome:<25} | {tipo:<10} | R$ {preco:.2f}")
-    print("-" * 55 + "\n")
+    print("\n" + "-" * 50)
+    print(f"{'ID':<5} | {'NOME DO SERVIÇO':<30} | {'PREÇO':<10}")
+    print("-" * 50)
+    for id_servico, nome, preco in servicos:
+        print(f"{id_servico:<5} | {nome:<30} | R$ {preco:.2f}")
+    print("-" * 50 + "\n")
 
-#  GERENCIAMENTO DE OS 
+# Gerenciamento de OS
 def calcular_total_pedido(pedido_id):
     conn = conectar()
     cursor = conn.cursor()
@@ -422,9 +418,9 @@ def registrar_pedido():
         print("⚠️ Cadastre técnicos primeiro.\n")
         return
 
-    produtos = listar_produtos()
-    if not produtos:
-        print("⚠️ Cadastre produtos primeiro.\n")
+    servicos = listar_servicos()
+    if not servicos:
+        print("⚠️ Cadastre serviços primeiro.\n")
         return
 
     exibir_clientes()
@@ -446,7 +442,7 @@ def registrar_pedido():
     print("\n--- AGENDAMENTO DA EXECUÇÃO ---")
     data_objeto = ler_data_valida("Digite a data agendada (DD/MM/AAAA): ")
     hora_string = ler_hora_valida("Digite o horário agendado (HH:MM): ")
-    
+
     data_agendamento = f"{data_objeto.strftime('%Y-%m-%d')} {hora_string}"
 
     conn = conectar()
@@ -461,14 +457,14 @@ def registrar_pedido():
             (cliente_id, tecnico_id, data_abertura, data_agendamento, "aberto")
         )
         pedido_id = cursor.lastrowid
-        produtos_dict = {produto[0]: produto for produto in produtos}
+        servicos_dict = {servico[0]: servico for servico in servicos}
 
         print(f"\nOrdem de Serviço #{pedido_id} criada e agendada com sucesso.")
-        print("Adicione os itens (serviços executados ou produtos utilizados):")
+        print("Adicione os serviços prestados nesta OS:")
 
         while True:
-            exibir_produtos()
-            entrada = input("ID produto/serviço (ENTER ou 0 finaliza): ").strip()
+            exibir_servicos()
+            entrada = input("ID do serviço (ENTER ou 0 finaliza): ").strip()
 
             if entrada == "" or entrada == "0":
                 break
@@ -477,19 +473,19 @@ def registrar_pedido():
                 print("⚠️ Digite somente números.\n")
                 continue
 
-            produto_id = int(entrada)
-            if produto_id not in produtos_dict:
-                print("⚠️ Item não encontrado.\n")
+            servico_id = int(entrada)
+            if servico_id not in servicos_dict:
+                print("⚠️ Serviço não encontrado.\n")
                 continue
 
-            quantidade = ler_inteiro("Quantidade: ", 1)
-            preco = produtos_dict[produto_id][3]
+            quantidade = ler_inteiro("Quantidade executadas: ", 1)
+            preco = servicos_dict[servico_id][2]
 
             cursor.execute(
-                "INSERT INTO itens_pedido (pedido_id, produto_id, quantidade, preco_unitario) VALUES (?,?,?,?)",
-                (pedido_id, produto_id, quantidade, preco)
+                "INSERT INTO itens_pedido (pedido_id, servico_id, quantidade, preco_unitario) VALUES (?,?,?,?)",
+                (pedido_id, servico_id, quantidade, preco)
             )
-            print("✅ Item adicionado.\n")
+            print("✅ Serviço adicionado à lista.\n")
 
         cursor.execute(
             "SELECT COUNT(*) FROM itens_pedido WHERE pedido_id=?",
@@ -562,7 +558,7 @@ def atualizar_status_pedido():
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM pedidos WHERE id=?", (pedido_id,))
     existe = cursor.fetchone()
-    
+
     if not existe:
         print("⚠️ OS não encontrada.\n")
         conn.close()
@@ -589,20 +585,19 @@ def atualizar_status_pedido():
     conn.close()
     print("✅ Status alterado com sucesso!\n")
 
-    
-#  RELATÓRIOS 
+#  RELATÓRIOS
 def relatorio_detalhado_pedido():
     conn = conectar()
     cursor = conn.cursor()
-    
+
     cursor.execute("""
-        SELECT p.id, c.nome, p.data_hora 
+        SELECT p.id, c.nome, p.data_hora
         FROM pedidos p
         INNER JOIN clientes c ON c.id = p.cliente_id
         ORDER BY p.id DESC
     """)
     lista_oss = cursor.fetchall()
-    
+
     if not lista_oss:
         print("⚠️ Nenhuma OS cadastrada no sistema.\n")
         conn.close()
@@ -632,9 +627,9 @@ def relatorio_detalhado_pedido():
         return
 
     cursor.execute("""
-        SELECT pr.nome, ip.quantidade, ip.preco_unitario, pr.tipo
+        SELECT s.nome, ip.quantidade, ip.preco_unitario
         FROM itens_pedido ip
-        INNER JOIN produtos pr ON pr.id=ip.produto_id
+        INNER JOIN servicos s ON s.id=ip.servico_id
         WHERE ip.pedido_id=?
     """, (pedido_id,))
     itens = cursor.fetchall()
@@ -643,7 +638,7 @@ def relatorio_detalhado_pedido():
     endereco_exibicao = pedido[6] if pedido[6] else "Não informado"
 
     print("\n" + "=" * 45)
-    print(f" OS DETALHADA: #{pedido[0]}")
+    print(f" OS Detalhada: #{pedido[0]}")
     print("=" * 45)
     print(f"Cliente: {pedido[1]}")
     print(f"Técnico Responsável: {pedido[2]}")
@@ -653,9 +648,9 @@ def relatorio_detalhado_pedido():
     print(f"Status: {pedido[5].upper()}")
     print("-" * 45)
 
-    print("Atividades Executadas e Materiais Utilizados:")
-    for nome, quantidade, preco, tipo in itens:
-        print(f" • [{tipo.upper()}] {quantidade}x {nome} = R$ {quantidade * preco:.2f}")
+    print("Serviços Realizados:")
+    for nome, quantidade, preco in itens:
+        print(f" • {quantidade}x {nome} = R$ {quantidade * preco:.2f}")
 
     total = calcular_total_pedido(pedido_id)
     print("-" * 45)
@@ -674,8 +669,8 @@ def relatorio_por_cliente():
     conn = conectar()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT p.id, t.nome, p.data_hora, p.data_agendamento, p.status 
-        FROM pedidos p 
+        SELECT p.id, t.nome, p.data_hora, p.data_agendamento, p.status
+        FROM pedidos p
         INNER JOIN tecnicos t ON t.id=p.tecnico_id
         WHERE p.cliente_id=? ORDER BY p.id DESC
     """, (cliente_id,))
@@ -735,7 +730,7 @@ def relatorio_por_status():
     print("2 - Em Andamento")
     print("3 - Concluídas / Realizadas")
     print("4 - Canceladas")
-    
+
     opcao = escolher_opcao("Escolha uma opção (1-4): ", ["1", "2", "3", "4"])
     status_map = {"1": "aberto", "2": "em andamento", "3": "concluido", "4": "cancelado"}
     status_buscado = status_map[opcao]
@@ -763,38 +758,37 @@ def relatorio_por_status():
         total = calcular_total_pedido(id_pedido)
         total_acumulado += total
         print(f"OS: #{id_pedido} | Cliente: {cliente} | Técnico: {tecnico} | Abertura: {formatar_data_br(data)} | Agendado: {formatar_data_sem_segundos_br(agendamento)} | Valor: R$ {total:.2f}")
-    
+
     print(f"\nValor total neste status: R$ {total_acumulado:.2f}\n")
 
-#  MENU PRINCIPAL 
+#  MENU PRINCIPAL
 def menu():
     criar_tabelas()
 
-   
     opcoes = {
         "1": cadastrar_cliente,
         "2": exibir_clientes,
-        "3": cadastrar_tecnico,    
-        "4": exibir_tecnicos,      
-        "5": cadastrar_produto,     
-        "6": exibir_produtos,      
-        "7": registrar_pedido,      
-        "8": exibir_pedidos,       
-        "9": atualizar_status_pedido, 
+        "3": cadastrar_tecnico,
+        "4": exibir_tecnicos,
+        "5": cadastrar_servico,
+        "6": exibir_servicos,
+        "7": registrar_pedido,
+        "8": exibir_pedidos,
+        "9": atualizar_status_pedido,
         "10": relatorio_detalhado_pedido,
-        "11": relatorio_por_cliente,   
+        "11": relatorio_por_cliente,
         "12": relatorio_por_periodo,
         "13": relatorio_por_status,
-        "14": alterar_cliente,          
-        "15": excluir_cliente,           
-        "16": excluir_servico_produto,   
-        "17": excluir_tecnico            
+        "14": alterar_cliente,
+        "15": excluir_cliente,
+        "16": excluir_servico,
+        "17": excluir_tecnico
     }
 
     while True:
         print("\n" + "=" * 55)
         print(" SISTEMA DE CONTROLE DE ORDENS DE SERVIÇO")
-        print(" EMPRESA DE LIMPEZA E MANUTENÇÃO")
+        print(" JS LIMPEZA E MANUTENÇÃO")
         print("=" * 55)
 
         print("""
@@ -802,12 +796,12 @@ def menu():
  2 - Listar clientes                 12 - Relatório por período
  3 - Cadastrar técnico               13 - Relatório Realizados/Pendentes
  4 - Listar técnicos                 ----------------------------------
- 5 - Cadastrar produto/serviço       14 - Alterar dados do cliente
- 6 - Listar produtos/serviços        15 - Excluir cliente 
- 7 - Registrar e Agendar OS          16 - Excluir serviço 
- 8 - Listar OSs                      17 - Excluir técnico 
+ 5 - Cadastrar serviço               14 - Alterar dados do cliente
+ 6 - Listar serviços                 15 - Excluir cliente
+ 7 - Registrar e Agendar OS          16 - Excluir serviço
+ 8 - Listar OSs                      17 - Excluir técnico
  9 - Alterar status da OS            ----------------------------------
-10 - Detalhes de OS Específica       0  - Sair
+10 - Detalhes de OS Específica        0  - Sair
 """)
 
         opcao = input("Escolha uma opção: ").strip()
